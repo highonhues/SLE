@@ -1,3 +1,4 @@
 # extensions to ignore
 *.rds
-*.xls
+*.xlsx
+*.csv
