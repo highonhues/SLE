@@ -1,8 +1,8 @@
 if (!require("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
 
-BiocManager::install("org.Hs.eg.db")
-BiocManager::install("AnnotationDbi")
+BiocManager::install("SingleR")
+BiocManager::install("celldex")
 
 # Install ensembldb and EnsDb.Hsapiens.v79
 BiocManager::install("ensembldb")
@@ -19,61 +19,42 @@ library(org.Hs.eg.db)
 library(AnnotationDbi)
 library(ensembldb)
 library(EnsDb.Hsapiens.v79)
-
+library(SingleR)
+library(celldex)
 #install.packages('devtools') #try this after installing rtools
 #devtools::install_github('immunogenomics/presto')
 
-bcells <- readRDS("C:/Users/Ananya/Desktop/SJSU/Stanford/SLE_data/seurat_B_PB_scRNA_SLE_HC_GSE174188.rds")
+#bcells <- readRDS("C:/Users/Ananya/Desktop/SJSU/Stanford/SLE_data/seurat_B_PB_scRNA_SLE_HC_GSE174188.rds")
 # bcells <- readRDS("/home/agupta1/SLE/seurat_B_PB_scRNA_SLE_HC_GSE174188.rds")
 
-
-set.seed(42)
-tot_cells <- ncol(bcells)
-sample_b <- sample(colnames(bcells), size=20000, replace=FALSE)
-bcells <- subset(bcells,cells=sample_b)
-
+bcells <- readRDS("C:/Users/Ananya/Desktop/SJSU/Stanford/SLE/SLE_data/bcells_subset.rds")
+print(bcells$RNA) # 21429 features for 20000 cells
+VariableFeatures(bcells)
 levels(bcells) # just 9 clusters
 slotNames(bcells)
 
-print(bcells$RNA)# 21429 features for 152962 (now 20k) cells
 
 #just exploring it
 as_tibble(bcells@meta.data)
-rownames(bcells@assays$RNA)
-VariableFeatures(bcells) #cleaned data i think
+#rownames(bcells@assays$RNA)genes
+
 
 
 ########### getting gene names ############
 
 
+#to check for duplicate genes
+which(duplicated(rownames(bcells@assays$RNA))) #none from here, duh
+#going to make the genes unique
 
-# # Get the current feature names (ENSEMBL IDs and gene symbols)
-# features <- rownames(bcells@assays$RNA)
-# 
-# # Extract ENSEMBL IDs (those starting with "ENSG")
-# ensembl_ids <- features[grep("^ENSG", features)]
-# 
-# # Map ENSEMBL IDs to gene symbols
-# gene_symbols <- mapIds(
-#   org.Hs.eg.db,
-#   keys = ensembl_ids,
-#   keytype = "ENSEMBL",
-#   column = "SYMBOL"
-# )
-# 
-# # View the mapping
-# head(gene_symbols)
-# sum(is.na(gene_symbols)) #1085
-# 
-# str(gene_symbols)# tot is 1156
 
-#barely any were labelled?? 
+#barely any were labelled with Annotatedbi
 #im tryinga new suggestion from https://support.bioconductor.org/p/87454/
 
 
 # Load the EnsDb object
 edb <- EnsDb.Hsapiens.v79
-str(edb, max.level = 3)
+#str(edb, max.level = 3)
 
 # Extract gene annotations
 gene_annotations <- genes(edb, return.type = "data.frame")
@@ -100,33 +81,56 @@ feature_mapping <- features #keys and values both are original feature names
 names(feature_mapping) <- features #name is key and val
 
 
+
 #i want to update only the mapped Ensmbl ids
 for (x in seq_along(ensembl_ids)) {#iterate along its length
   if (!is.na(gene_symbols[x])) { #at the index if the symbol is not na
-    feature_mapping[ensembl_ids[x]] <- gene_symbols[x]
+    if (gene_symbols[x] %in% feature_mapping) {
+      # Append the Ensembl ID to make it unique
+      feature_mapping[ensembl_ids[x]] <- paste0(gene_symbols[x], "_", ensembl_ids[x])
+    } else {
+      # Use the gene symbol as is
+      feature_mapping[ensembl_ids[x]] <- gene_symbols[x]
+    }
   }
-  
 }
 
 head(feature_mapping)
-
+head(rownames(bcells@assays$RNA))
 # Update the feature names in the Seurat object
 rownames(bcells@assays$RNA) <- feature_mapping[rownames(bcells@assays$RNA)]
-#checking it and it worked
-head(rownames(bcells@assays$RNA))
 
-VariableFeatures(bcells)
+#checking it and it worked !!!
+head(rownames(bcells@assays$RNA))
+print(bcells$RNA)
+VariableFeatures(bcells) #it got updated here too YAYYYY
+
+# i was getting duplicate row name errors
+# some ensembl ids mapped to the same gene symbols as the ones already existing
+# in the data
+
+#i dont want to remove them
+#1. is it good to merge them? is that even possible?
+#2. remove?
+#3. Im opting to append it to the ensg val. will it cause problems in singler?
+
 
 # Check raw counts
 head(LayerData(bcells, assay = "RNA", layer = "counts")[, 1:5])
 
 
+#########fixing barcodes col names ################
 
-bcells[["pca"]] #why does it look like that is that barcodes
 
-# Examine and visualize PCA results a few different ways
-print(bcells[["pca"]], dims = 1:5, nfeatures = 5)
-VizDimLoadings(bcells, dims = 1:2, reduction = "pca")
+#weird ahh barcode names
+head(colnames(bcells), 10) #they look so bad ill kms
+clean_cols <- gsub("-.*$", "", colnames(bcells)) #pattern,replace,item
+clean_cols <- make.unique(clean_cols)
+#colnames(bcells) <- clean_cols sseurat 5 not letting me
+bcells <- RenameCells(bcells, new.names = clean_cols)
+head(colnames(bcells), 10)
+any(duplicated(colnames(bcells))) #falseeee
+
 
 
 
@@ -140,6 +144,20 @@ summary(bcells@meta.data$percent.mt)
 #Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
 #0.1002  2.6603  3.4204  3.7700  4.3843 59.1613
 
+
+#post the 20k subset
+# summary(bcells@meta.data$percent.mt)
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 0.1002  2.6636  3.4286  3.7780  4.4026 53.8231 
+
+#ribosomal genes
+bcells[["percent.rb"]]<- PercentageFeatureSet(bcells, pattern = "^RP[SL]")
+#well idk what this plot is tbh so ill just leave it 
+#will check later if its affecting clustering
+
+
+# Plot percent.rb vs. PC1 and PC2
+FeaturePlot(bcells, features = "percent.rb", reduction = "pca")
 # Add number of genes per UMI for each cell to metadata
 bcells$log10GenesPerUMI <- log10(bcells$nFeature_RNA) / log10(bcells$nCount_RNA)
 
@@ -175,7 +193,54 @@ plot_nFeaturesqc
 bcells <- subset(x = bcells, 
                  subset= (percent.mt < 5))
 
+
+
+
+########### Using SingleR ###########
+
+# first check is the data normalised
+# Check raw counts
+head(LayerData(bcells, assay = "RNA", layer = "counts")[, 1:5])
+head(LayerData(bcells, assay = "RNA", layer = "data")[, 18:5]) #sparse so i cant tell
+
+
+# Raw counts should be integers
+summary(as.vector(LayerData(bcells, assay = "RNA", layer = "counts")))
+
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 0.0     0.0     0.0     0.1     0.0  6023.0 
+
+# Normalized data should be float/log-transformed
+summary(as.vector(GetAssayData(bcells, assay = "RNA", layer = "data")))  #log normalized
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 0.00000 0.00000 0.00000 0.06888 0.00000 8.57346 
+
+
+#### singler applying #########
+
+#ribosome remove
+#cell cycle
+#singleR datat load immune data reference
+#then manual
+#eg marker for PB
+
+
+
+
+
 ###########plots######################
+
+#top 10 variable features
+top10 <- head(VariableFeatures(bcells),10)
+plot1var <- VariableFeaturePlot(bcells)
+plot1var_labeled <-LabelPoints(plot = plot1var, points = top10, repel = TRUE, xnudge = 0, ynudge = 0)
+print(plot1var_labeled)
+
+# Examine and visualize PCA results a few different ways
+print(bcells[["pca"]], dims = 1:5, nfeatures = 5)
+VizDimLoadings(bcells, dims = 1:2, reduction = "pca")
+
+
 ## Plot PCA
 pca<-PCAPlot(bcells,
         split.by = "SLE_status",pt.size = 1.5, alpha = 0.8)
@@ -187,50 +252,19 @@ umap_og
 
 
 
-
-install.packages("biomaRt")
-library(biomaRt)
-ensembl <- useEnsembl(biomart = "genes", dataset = "hsapiens_gene_ensembl")
-# Get the ENSG IDs from your Seurat object
-ensg_ids <- rownames(bcells)
-
-# Query biomaRt for gene symbols
-gene_annotations <- getBM(
-  attributes = c("ensembl_gene_id", "external_gene_name"),
-  filters = "ensembl_gene_id",
-  values = ensg_ids,
-  mart = ensembl
-)
-
-#check
-head(gene_annotations)
-
-#named vector for mapping
-gene_symbols <- gene_annotations$hgnc_symbol
-names(gene_symbols) <- gene_annotations$ensembl_gene_id
-
-#updating VariableFeatures
-variable_features_ensg <- VariableFeatures(bcells)
-variable_features_symbols <- gene_symbols[variable_features_ensg]
-VariableFeatures(bcells) <- variable_features_symbols#None of the features specified are present in this assay
-head(VariableFeatures(bcells))
-
 #by clust
 ##gene names to be changed in the beginning
 
 bcells.markers <- FindAllMarkers(bcells, only.pos = TRUE,logfc.threshold = 0.25)
-write.csv(bcells.markers, file = "bcells_markers.csv", row.names = FALSE)
+write.csv(bcells.markers, file = "bcells_markers_subset.csv", row.names = FALSE)
+#write.csv(bcells.markers, file = "bcells_markers.csv", row.names = FALSE)
 #bcells.markers <- read.csv("bcells_markers.csv")
 
 #compare to https://www.genome.jp/kegg/pathway.html, 
 #http://bio-bigdata.hrbmu.edu.cn/CellMarker/CellMarkerSearch.jsp?quickSearchInfo=CPVL2&index_key=2#framekuang,
 #ncbi
 
-#ribosome remove
-#cell cycle
-#singleR datat load immune data reference
-#then manual
-#eg marker for PB
+
 
 #manual markers
 clust0.markers <- bcells.markers %>%
