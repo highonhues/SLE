@@ -1,0 +1,32 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+library(tidyverse)
+library(dplyr) #DATA wrangling filtering, selecting and summarising
+library(Seurat)
+library(patchwork)#combines multiple ggplot2 plots into a single plot
+library(GEOquery)
+library(ggplot2)
+library(tibble)
+library(org.Hs.eg.db)
+library(AnnotationDbi)
+library(ensembldb)
+library(EnsDb.Hsapiens.v79)
+library(SingleR)
+library(celldex)
+library(SingleCellExperiment)
+```
+
+```{r}
+
+bcells <- readRDS("bcells_cleaned")
+
+
+```
