@@ -24,10 +24,9 @@ library(celldex)
 #install.packages('devtools') #try this after installing rtools
 #devtools::install_github('immunogenomics/presto')
 
-#bcells <- readRDS("C:/Users/Ananya/Desktop/SJSU/Stanford/SLE_data/seurat_B_PB_scRNA_SLE_HC_GSE174188.rds")
-# bcells <- readRDS("/home/agupta1/SLE/seurat_B_PB_scRNA_SLE_HC_GSE174188.rds")
 
-bcells <- readRDS("C:/Users/Ananya/Desktop/SJSU/Stanford/SLE/SLE_data/bcells_subset.rds")
+
+bcells <- readRDS("C:/Users/bcells_subset.rds")
 print(bcells$RNA) # 21429 features for 20000 cells
 VariableFeatures(bcells)
 levels(bcells) # just 9 clusters
